@@ -1,3 +1,7 @@
+:root {
+  --page-left: 50px;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -11,30 +15,37 @@ body {
   font-size: 14px;
   font-weight: 400;
   line-height: 1.6;
-  min-height: 100dvh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  min-height: 100vh;
+  padding: 40px 20px 40px 0;
 }
 
-.game {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
+.container {
+  max-width: 50vw;
+  padding-left: var(--page-left);
+  padding-bottom: 100px;
 }
 
-.title {
+h1 {
   font-size: 28px;
   font-weight: 400;
   color: #8a8a8a;
-  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+  text-align: left;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #8a8a8a;
+  margin-bottom: 40px;
+  text-align: left;
+  line-height: 1.6;
 }
 
 .board {
   display: grid;
   grid-template-columns: repeat(3, 100px);
   grid-template-rows: repeat(3, 100px);
+  margin-bottom: 24px;
 }
 
 .cell {
@@ -71,6 +82,7 @@ body {
   font-size: 14px;
   color: #8a8a8a;
   min-height: 22px;
+  margin-bottom: 8px;
 }
 
 .reset {
@@ -90,7 +102,15 @@ body {
 }
 
 @media (max-width: 500px) {
-  .title {
+  :root {
+    --page-left: 32px;
+  }
+
+  .container {
+    max-width: none;
+  }
+
+  h1 {
     font-size: 22px;
   }
 
@@ -105,6 +125,10 @@ body {
 }
 
 @media (max-width: 380px) {
+  :root {
+    --page-left: 12px;
+  }
+
   .board {
     grid-template-columns: repeat(3, 65px);
     grid-template-rows: repeat(3, 65px);
@@ -112,10 +136,5 @@ body {
 
   .cell {
     font-size: 24px;
-  }
-
-  .game {
-    gap: 16px;
-    padding: 8px;
   }
 }

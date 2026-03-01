@@ -1,5 +1,6 @@
+'use client'
+
 import { useState, useCallback } from 'react'
-import './App.css'
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -16,7 +17,7 @@ function checkWinner(board) {
   return null
 }
 
-export default function App() {
+export default function Page() {
   const [board, setBoard] = useState(Array(9).fill(''))
   const [gameStatus, setGameStatus] = useState('playing')
   const [winningCells, setWinningCells] = useState([])
@@ -82,8 +83,11 @@ export default function App() {
   }[gameStatus]
 
   return (
-    <div className="game">
-      <h1 className="title">tic tac toe</h1>
+    <div className="container">
+      <h1>tic tac toe</h1>
+      <p className="subtitle">
+        play tic tac toe against a minimax AI. you are X, the computer is O.
+      </p>
       <div className="board">
         {board.map((cell, i) => (
           <button
