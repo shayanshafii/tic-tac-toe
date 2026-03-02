@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import * as Sentry from '@sentry/nextjs'
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -68,8 +69,8 @@ export default function Page() {
       } else if (!afterAI.includes('')) {
         setGameStatus('draw')
       }
-    } catch {
-      // If API fails, allow player to keep playing
+    } catch (err) {
+      Sentry.captureException(err)
     } finally {
       setIsThinking(false)
     }
