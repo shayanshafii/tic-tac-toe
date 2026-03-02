@@ -82,6 +82,6 @@ export async function POST(request) {
 
     return NextResponse.json({ index })
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    throw e
   }
 }
