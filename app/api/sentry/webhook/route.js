@@ -11,24 +11,142 @@ function verifySignature(body, signature, secret) {
   return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature))
 }
 
-function buildDevinPrompt({ title, culprit, level, permalink }) {
-  const contextLines = [
-    `title: ${title}`,
-    culprit ? `culprit: ${culprit}` : null,
-    level ? `level: ${level}` : null,
-    permalink ? `sentry issue: ${permalink}` : null,
-  ].filter(Boolean).join('\n')
 
-  return `You are Devin. A Sentry issue was created for tic-tac-toe.
+function extractStackInfo(error) {
+  const values = error.exception?.values ?? []
+  for (const exc of values) {
+    const frames = exc.stacktrace?.frames
+    if (!frames?.length) continue
+    const appFrames = frames.filter((f) => f.in_app)
+    const top = appFrames.at(-1) ?? frames.at(-1)
+    return {
+      file: top.filename ?? top.abs_path ?? 'unknown',
+      line: top.lineno ?? null,
+      function: top.function ?? null,
+      type: exc.type,
+      value: exc.value,
+    }
+  }
+  return null
+}
+
+function isErrorRelevantToProject(error) {
+  if (error.platform && !['javascript', 'node'].includes(error.platform)) {
+    return false
+  }
+
+  const values = error.exception?.values ?? []
+  const hasAnyStack = values.some((exc) => exc.stacktrace?.frames?.length > 0)
+  if (!hasAnyStack) return true
+
+  for (const exc of values) {
+    const frames = exc.stacktrace?.frames
+    if (!frames?.length) continue
+    if (frames.some((f) => /\.(jsx?|tsx?|mjs|cjs)$/i.test(f.filename ?? f.abs_path ?? ''))) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function formatTopFrames(error, hasSourcemaps) {
+  const values = error.exception?.values ?? []
+  for (const exc of values) {
+    const frames = exc.stacktrace?.frames
+    if (!frames?.length) continue
+    const appFrames = frames.filter((f) => f.in_app)
+    const topFrames = (appFrames.length ? appFrames : frames).slice(-3).reverse()
+    const lines = topFrames
+      .map((f) => `  ${f.filename ?? f.abs_path ?? '?'}:${f.lineno ?? '?'} in ${f.function ?? '?'}`)
+    if (!hasSourcemaps) {
+      lines.push('  (minified — no sourcemaps available)')
+    }
+    return lines.join('\n')
+  }
+  return null
+}
+
+function formatBreadcrumbs(error) {
+  const crumbs = error.breadcrumbs?.values
+  if (!crumbs?.length) return null
+
+  const relevant = crumbs
+    .filter((c) => ['fetch', 'http', 'xhr', 'ui.click', 'navigation', 'console'].includes(c.category))
+    .slice(-5)
+  if (!relevant.length) return null
+
+  return relevant.map((c) => {
+    if (c.category === 'fetch' || c.category === 'http' || c.category === 'xhr') {
+      const method = c.data?.method ?? '?'
+      const url = c.data?.url ?? '?'
+      const status = c.data?.status_code
+      const statusStr = status ? ` → ${status}` : ''
+      return `  [${c.category}] ${method} ${url}${statusStr}`
+    }
+    if (c.category === 'ui.click') {
+      return `  [ui.click] ${c.message ?? '?'}`
+    }
+    if (c.category === 'navigation') {
+      return `  [navigation] ${c.data?.from ?? '?'} → ${c.data?.to ?? '?'}`
+    }
+    if (c.category === 'console') {
+      return `  [console.${c.level ?? 'log'}] ${(c.message ?? '').slice(0, 120)}`
+    }
+    return `  [${c.category}] ${c.message ?? ''}`
+  }).join('\n')
+}
+
+function extractPageUrl(error) {
+  const tags = error.tags
+  if (!Array.isArray(tags)) return null
+  const urlTag = tags.find((t) => t[0] === 'url')
+  return urlTag?.[1] ?? null
+}
+
+function checkSourcemaps(error) {
+  const errs = error.errors
+  if (!Array.isArray(errs)) return true
+  return !errs.some((e) => e.type === 'js_no_source' || e.symbolicator_type === 'missing_source')
+}
+
+function buildDevinPrompt({ title, stack, topFrames, breadcrumbs, pageUrl, sentryUrl, release, transaction, environment, requestUrl, requestMethod }) {
+  const errorLine = stack
+    ? `${stack.type}: ${stack.value}`
+    : title
+
+  const stackSection = topFrames
+    ? `stack:\n${topFrames}`
+    : '(no stack trace available)'
+
+  const breadcrumbsSection = breadcrumbs
+    ? `breadcrumbs (most recent last):\n${breadcrumbs}`
+    : null
+
+  const contextLines = [
+    `error: ${errorLine}`,
+    transaction ? `transaction: ${transaction}` : null,
+    pageUrl ? `page: ${pageUrl}` : null,
+    requestMethod && requestUrl ? `request: ${requestMethod} ${requestUrl}` : null,
+    environment ? `environment: ${environment}` : null,
+    release ? `release: ${release}` : null,
+    sentryUrl ? `sentry event: ${sentryUrl}` : null,
+    '',
+    breadcrumbsSection,
+    '',
+    stackSection,
+  ].filter((line) => line != null).join('\n')
+
+  return `You are Devin. A Sentry error was captured for tic-tac-toe.
 
 Repo: ${REPO_URL}
 Production: ${PRODUCTION_URL}
 
-Sentry issue:
+Sentry context:
 ${contextLines}
 
 Tasks:
-1. Open the Sentry issue link, inspect the latest event, and root-cause the error.
+1. Root-cause the error using the stack trace, breadcrumbs, and Sentry context.
 2. Implement a fix and add a small regression test or minimal check.
 3. Open a PR with the fix and include a short explanation.`
 }
@@ -120,36 +238,60 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, skipped: 'action is not created' })
   }
 
-  const issue = payload.data?.issue
-  if (!issue) {
-    console.log('[sentry-webhook] Skipping — no issue data in payload')
-    return NextResponse.json({ ok: true, skipped: 'no issue data' })
+  const error = payload.data?.error
+  if (!error) {
+    console.log('[sentry-webhook] Skipping — no error data in payload')
+    return NextResponse.json({ ok: true, skipped: 'no error data' })
   }
 
-  const issueId = issue.id
-  console.log('[sentry-webhook] New issue received', {
-    issueId,
-    title: issue.title,
-    level: issue.level,
-    platform: issue.platform,
-    culprit: issue.culprit,
-    permalink: issue.permalink,
+  if (!isErrorRelevantToProject(error)) {
+    console.log('[sentry-webhook] Skipping — error is not relevant to the project', {
+      platform: error.platform,
+      title: error.title,
+    })
+    return NextResponse.json({ ok: true, skipped: 'error not relevant to project' })
+  }
+
+  const eventId = error.event_id
+  console.log('[sentry-webhook] Error event received', {
+    eventId,
+    title: error.title,
+    level: error.level,
+    platform: error.platform,
+    culprit: error.culprit,
+    transaction: error.transaction,
+    environment: error.environment,
+    release: error.release,
+    sentryUrl: error.web_url,
   })
+
+  const stack = extractStackInfo(error)
+  const hasSourcemaps = checkSourcemaps(error)
+  const topFrames = formatTopFrames(error, hasSourcemaps)
+  const breadcrumbs = formatBreadcrumbs(error)
+  const pageUrl = extractPageUrl(error)
 
   const prompt = buildDevinPrompt({
-    title: issue.title,
-    culprit: issue.culprit,
-    level: issue.level,
-    permalink: issue.permalink,
+    title: error.title,
+    stack,
+    topFrames,
+    breadcrumbs,
+    pageUrl,
+    sentryUrl: error.web_url,
+    release: error.release,
+    transaction: error.transaction ?? error.culprit,
+    environment: error.environment,
+    requestUrl: error.request?.url,
+    requestMethod: error.request?.method,
   })
 
-  console.log('[sentry-webhook] Triggering Devin session for issue', issueId)
+  console.log('[sentry-webhook] Triggering Devin session for event', eventId)
 
-  after(() => createDevinSession(prompt, issueId))
+  after(() => createDevinSession(prompt, eventId))
 
   return NextResponse.json({
     ok: true,
-    issueId,
+    eventId,
     devinTriggered: true,
   })
 }
