@@ -1,4 +1,4 @@
-import { describe, it, before } from 'node:test'
+import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
 // We can't import the route directly (NextResponse dependency),
