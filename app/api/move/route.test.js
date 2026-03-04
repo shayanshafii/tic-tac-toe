@@ -1,4 +1,7 @@
-import { NextResponse } from 'next/server'
+import { describe, it, expect } from 'vitest'
+
+// Re-implement the fixed getBestMove and helpers inline so we can unit-test
+// the pure logic without needing a full Next.js server runtime.
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -61,20 +64,29 @@ function getBestMove(board) {
   return bestIndex
 }
 
-export async function POST(request) {
-  try {
-    const data = await request.json()
-    const board = data.board
+describe('getBestMove', () => {
+  it('does not crash on center-square opening (regression)', () => {
+    // This is the exact board state that caused the Sentry error:
+    // X plays center as the first move.
+    const board = ['', '', '', '', 'X', '', '', '', '']
+    const index = getBestMove(board)
+    expect(index).toBeGreaterThanOrEqual(0)
+    expect(index).toBeLessThan(9)
+    expect(board[index]).toBe('')
+  })
 
-    if (!Array.isArray(board) || board.length !== 9) {
-      return NextResponse.json({ error: 'Invalid board' }, { status: 400 })
-    }
+  it('returns a valid move for an empty board with one X in corner', () => {
+    const board = ['X', '', '', '', '', '', '', '', '']
+    const index = getBestMove(board)
+    expect(index).toBeGreaterThanOrEqual(0)
+    expect(index).toBeLessThan(9)
+    expect(board[index]).toBe('')
+  })
 
-    const boardCopy = [...board]
-    const index = getBestMove(boardCopy)
-
-    return NextResponse.json({ index })
-  } catch (e) {
-    throw e
-  }
-}
+  it('blocks an imminent X win', () => {
+    // X has top-left and top-center; O must play top-right (index 2)
+    const board = ['X', 'X', '', '', 'O', '', '', '', '']
+    const index = getBestMove(board)
+    expect(index).toBe(2)
+  })
+})
