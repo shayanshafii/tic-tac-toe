@@ -50,21 +50,67 @@ function isErrorRelevantToProject(error) {
   return false
 }
 
-function formatTopFrames(error) {
+function formatTopFrames(error, hasSourcemaps) {
   const values = error.exception?.values ?? []
   for (const exc of values) {
     const frames = exc.stacktrace?.frames
     if (!frames?.length) continue
     const appFrames = frames.filter((f) => f.in_app)
     const topFrames = (appFrames.length ? appFrames : frames).slice(-3).reverse()
-    return topFrames
+    const lines = topFrames
       .map((f) => `  ${f.filename ?? f.abs_path ?? '?'}:${f.lineno ?? '?'} in ${f.function ?? '?'}`)
-      .join('\n')
+    if (!hasSourcemaps) {
+      lines.push('  (minified — no sourcemaps available)')
+    }
+    return lines.join('\n')
   }
   return null
 }
 
-function buildDevinPrompt({ title, stack, topFrames, sentryUrl, release, transaction, environment, requestUrl, requestMethod }) {
+function formatBreadcrumbs(error) {
+  const crumbs = error.breadcrumbs?.values
+  if (!crumbs?.length) return null
+
+  const relevant = crumbs
+    .filter((c) => ['fetch', 'http', 'xhr', 'ui.click', 'navigation', 'console'].includes(c.category))
+    .slice(-5)
+  if (!relevant.length) return null
+
+  return relevant.map((c) => {
+    if (c.category === 'fetch' || c.category === 'http' || c.category === 'xhr') {
+      const method = c.data?.method ?? '?'
+      const url = c.data?.url ?? '?'
+      const status = c.data?.status_code
+      const statusStr = status ? ` → ${status}` : ''
+      return `  [${c.category}] ${method} ${url}${statusStr}`
+    }
+    if (c.category === 'ui.click') {
+      return `  [ui.click] ${c.message ?? '?'}`
+    }
+    if (c.category === 'navigation') {
+      return `  [navigation] ${c.data?.from ?? '?'} → ${c.data?.to ?? '?'}`
+    }
+    if (c.category === 'console') {
+      return `  [console.${c.level ?? 'log'}] ${(c.message ?? '').slice(0, 120)}`
+    }
+    return `  [${c.category}] ${c.message ?? ''}`
+  }).join('\n')
+}
+
+function extractPageUrl(error) {
+  const tags = error.tags
+  if (!Array.isArray(tags)) return null
+  const urlTag = tags.find((t) => t[0] === 'url')
+  return urlTag?.[1] ?? null
+}
+
+function checkSourcemaps(error) {
+  const errs = error.errors
+  if (!Array.isArray(errs)) return true
+  return !errs.some((e) => e.type === 'js_no_source' || e.symbolicator_type === 'missing_source')
+}
+
+function buildDevinPrompt({ title, stack, topFrames, breadcrumbs, pageUrl, sentryUrl, release, transaction, environment, requestUrl, requestMethod }) {
   const errorLine = stack
     ? `${stack.type}: ${stack.value}`
     : title
@@ -73,15 +119,23 @@ function buildDevinPrompt({ title, stack, topFrames, sentryUrl, release, transac
     ? `stack:\n${topFrames}`
     : '(no stack trace available)'
 
+  const breadcrumbsSection = breadcrumbs
+    ? `breadcrumbs (most recent last):\n${breadcrumbs}`
+    : null
+
   const contextLines = [
     `error: ${errorLine}`,
     transaction ? `transaction: ${transaction}` : null,
+    pageUrl ? `page: ${pageUrl}` : null,
     requestMethod && requestUrl ? `request: ${requestMethod} ${requestUrl}` : null,
     environment ? `environment: ${environment}` : null,
     release ? `release: ${release}` : null,
     sentryUrl ? `sentry event: ${sentryUrl}` : null,
+    '',
+    breadcrumbsSection,
+    '',
     stackSection,
-  ].filter(Boolean).join('\n')
+  ].filter((line) => line != null).join('\n')
 
   return `You are Devin. A Sentry error was captured for tic-tac-toe.
 
@@ -92,7 +146,7 @@ Sentry context:
 ${contextLines}
 
 Tasks:
-1. Root-cause the error using the stack trace and Sentry context.
+1. Root-cause the error using the stack trace, breadcrumbs, and Sentry context.
 2. Implement a fix and add a small regression test or minimal check.
 3. Open a PR with the fix and include a short explanation.`
 }
@@ -212,12 +266,17 @@ export async function POST(request) {
   })
 
   const stack = extractStackInfo(error)
-  const topFrames = formatTopFrames(error)
+  const hasSourcemaps = checkSourcemaps(error)
+  const topFrames = formatTopFrames(error, hasSourcemaps)
+  const breadcrumbs = formatBreadcrumbs(error)
+  const pageUrl = extractPageUrl(error)
 
   const prompt = buildDevinPrompt({
     title: error.title,
     stack,
     topFrames,
+    breadcrumbs,
+    pageUrl,
     sentryUrl: error.web_url,
     release: error.release,
     transaction: error.transaction ?? error.culprit,
