@@ -224,6 +224,11 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, skipped: 'no error data' })
   }
 
+  if (error.environment !== 'vercel-production') {
+    console.log(`[sentry-webhook] Skipping — environment is "${error.environment}", not "vercel-production"`)
+    return NextResponse.json({ ok: true, skipped: 'not production environment' })
+  }
+
   const eventId = error.event_id
   console.log('[sentry-webhook] Error event received', {
     eventId,
