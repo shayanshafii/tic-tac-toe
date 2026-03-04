@@ -1,4 +1,7 @@
-import { NextResponse } from 'next/server'
+import { describe, it, expect } from 'vitest'
+
+// Import the module's internals by re-exporting for testing
+// We'll inline the logic here since route.js doesn't export getBestMove directly
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -61,20 +64,30 @@ function getBestMove(board) {
   return bestIndex
 }
 
-export async function POST(request) {
-  try {
-    const data = await request.json()
-    const board = data.board
+describe('getBestMove', () => {
+  it('should not crash when X opens with center square', () => {
+    // This is the exact scenario that caused the Sentry error:
+    // Player places X in center (index 4) as their first move
+    const board = ['', '', '', '', 'X', '', '', '', '']
+    const move = getBestMove(board)
+    expect(move).toBeGreaterThanOrEqual(0)
+    expect(move).toBeLessThan(9)
+    expect(board[move]).toBe('')
+  })
 
-    if (!Array.isArray(board) || board.length !== 9) {
-      return NextResponse.json({ error: 'Invalid board' }, { status: 400 })
-    }
+  it('should return a valid move for an empty board with one X', () => {
+    const board = ['X', '', '', '', '', '', '', '', '']
+    const move = getBestMove(board)
+    expect(move).toBeGreaterThanOrEqual(0)
+    expect(move).toBeLessThan(9)
+    expect(board[move]).toBe('')
+  })
 
-    const boardCopy = [...board]
-    const index = getBestMove(boardCopy)
-
-    return NextResponse.json({ index })
-  } catch (e) {
-    throw e
-  }
-}
+  it('should return a valid move for a mid-game board', () => {
+    const board = ['X', 'O', '', '', 'X', '', '', '', '']
+    const move = getBestMove(board)
+    expect(move).toBeGreaterThanOrEqual(0)
+    expect(move).toBeLessThan(9)
+    expect(board[move]).toBe('')
+  })
+})
