@@ -163,10 +163,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  console.log('[sentry-webhook] Payload received', {
-    action: payload.action,
-    actor: payload.actor?.name ?? payload.actor?.type,
-  })
+  console.log('[sentry-webhook] Payload received', JSON.stringify(payload, null, 2))
 
   if (payload.action !== 'created') {
     console.log(`[sentry-webhook] Skipping — action is "${payload.action}", not "created"`)
