@@ -30,6 +30,26 @@ function extractStackInfo(error) {
   return null
 }
 
+function isErrorRelevantToProject(error) {
+  if (error.platform && !['javascript', 'node'].includes(error.platform)) {
+    return false
+  }
+
+  const values = error.exception?.values ?? []
+  const hasAnyStack = values.some((exc) => exc.stacktrace?.frames?.length > 0)
+  if (!hasAnyStack) return true
+
+  for (const exc of values) {
+    const frames = exc.stacktrace?.frames
+    if (!frames?.length) continue
+    if (frames.some((f) => /\.(jsx?|tsx?|mjs|cjs)$/i.test(f.filename ?? f.abs_path ?? ''))) {
+      return true
+    }
+  }
+
+  return false
+}
+
 function formatTopFrames(error) {
   const values = error.exception?.values ?? []
   for (const exc of values) {
@@ -72,10 +92,9 @@ Sentry context:
 ${contextLines}
 
 Tasks:
-1. Clone the repo and check out the commit for the release above.
-2. Root-cause the error using the stack trace and Sentry context.
-3. Implement a fix and add a small regression test or minimal check.
-4. Open a PR with the fix and include a short explanation.`
+1. Root-cause the error using the stack trace and Sentry context.
+2. Implement a fix and add a small regression test or minimal check.
+3. Open a PR with the fix and include a short explanation.`
 }
 
 async function createDevinSession(prompt, issueId) {
@@ -169,6 +188,14 @@ export async function POST(request) {
   if (!error) {
     console.log('[sentry-webhook] Skipping — no error data in payload')
     return NextResponse.json({ ok: true, skipped: 'no error data' })
+  }
+
+  if (!isErrorRelevantToProject(error)) {
+    console.log('[sentry-webhook] Skipping — error is not relevant to the project', {
+      platform: error.platform,
+      title: error.title,
+    })
+    return NextResponse.json({ ok: true, skipped: 'error not relevant to project' })
   }
 
   const eventId = error.event_id
