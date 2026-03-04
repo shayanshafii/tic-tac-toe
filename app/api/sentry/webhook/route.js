@@ -83,13 +83,20 @@ Tasks:
 Output: open a PR with the fix and include a short explanation.`
 }
 
-async function createDevinSession(prompt) {
+async function createDevinSession(prompt, issueId) {
   const key = process.env.DEVIN_API_KEY
   if (!key) {
-    console.error('[sentry-webhook] DEVIN_API_KEY not set, skipping session creation')
+    console.error('[sentry-webhook] DEVIN_API_KEY not set, skipping Devin session for', issueId)
     return
   }
 
+  console.log('[sentry-webhook] Calling Devin API', {
+    issueId,
+    endpoint: 'https://api.devin.ai/v1/sessions',
+    promptLength: prompt.length,
+  })
+
+  const startTime = Date.now()
   const res = await fetch('https://api.devin.ai/v1/sessions', {
     method: 'POST',
     headers: {
@@ -98,47 +105,86 @@ async function createDevinSession(prompt) {
     },
     body: JSON.stringify({ prompt, idempotent: true }),
   })
+  const durationMs = Date.now() - startTime
 
   if (!res.ok) {
-    console.error('[sentry-webhook] Devin API error:', res.status, await res.text())
+    const errorBody = await res.text()
+    console.error('[sentry-webhook] Devin API error', {
+      issueId,
+      status: res.status,
+      durationMs,
+      body: errorBody,
+    })
   } else {
     const data = await res.json()
-    console.log('[sentry-webhook] Devin session created:', data.session_id ?? data.url ?? data)
+    console.log('[sentry-webhook] Devin session created', {
+      issueId,
+      sessionId: data.session_id,
+      url: data.url,
+      durationMs,
+    })
   }
 }
 
 export async function POST(request) {
+  console.log('[sentry-webhook] Incoming webhook received', {
+    method: request.method,
+    url: request.url,
+    resource: request.headers.get('sentry-hook-resource'),
+  })
+
   const secret = process.env.SENTRY_CLIENT_SECRET
   if (!secret) {
+    console.error('[sentry-webhook] SENTRY_CLIENT_SECRET not set')
     return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 })
   }
 
   const signature = request.headers.get('sentry-hook-signature')
   if (!signature) {
+    console.warn('[sentry-webhook] Request missing sentry-hook-signature header')
     return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
   }
 
   const body = await request.text()
 
   if (!verifySignature(body, signature, secret)) {
+    console.warn('[sentry-webhook] Signature verification failed')
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
+
+  console.log('[sentry-webhook] Signature verified successfully')
 
   let payload
   try {
     payload = JSON.parse(body)
   } catch {
+    console.error('[sentry-webhook] Failed to parse request body as JSON')
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
+  console.log('[sentry-webhook] Payload received', {
+    action: payload.action,
+    actor: payload.actor?.name ?? payload.actor?.type,
+  })
+
   if (payload.action !== 'created') {
+    console.log(`[sentry-webhook] Skipping — action is "${payload.action}", not "created"`)
     return NextResponse.json({ ok: true, skipped: 'action is not created' })
   }
 
   const issue = payload.data?.issue
   if (!issue) {
+    console.log('[sentry-webhook] Skipping — no issue data in payload')
     return NextResponse.json({ ok: true, skipped: 'no issue data' })
   }
+
+  console.log('[sentry-webhook] Issue received', {
+    id: issue.shortId,
+    title: issue.title,
+    level: issue.level,
+    platform: issue.platform,
+    culprit: issue.culprit,
+  })
 
   const stack = extractStackInfo(issue)
   const topFrames = formatTopFrames(issue)
@@ -149,9 +195,9 @@ export async function POST(request) {
     topFrames,
   })
 
-  console.log(`[sentry-webhook] issue:created — ${issue.title} (${issue.shortId})`)
+  console.log('[sentry-webhook] Triggering Devin session for issue', issue.shortId)
 
-  after(() => createDevinSession(prompt))
+  after(() => createDevinSession(prompt, issue.shortId))
 
   return NextResponse.json({
     ok: true,
