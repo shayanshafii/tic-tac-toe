@@ -1,4 +1,7 @@
-import { NextResponse } from 'next/server'
+/**
+ * Minimal regression test for the move API logic.
+ * Duplicates the pure functions to avoid importing next/server.
+ */
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -61,20 +64,39 @@ function getBestMove(board) {
   return bestIndex
 }
 
-export async function POST(request) {
-  try {
-    const data = await request.json()
-    const board = data.board
+let passed = 0
+let failed = 0
 
-    if (!Array.isArray(board) || board.length !== 9) {
-      return NextResponse.json({ error: 'Invalid board' }, { status: 400 })
-    }
-
-    const boardCopy = [...board]
-    const index = getBestMove(boardCopy)
-
-    return NextResponse.json({ index })
-  } catch (e) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+function assert(name, condition) {
+  if (condition) {
+    console.log('PASS: ' + name)
+    passed++
+  } else {
+    console.error('FAIL: ' + name)
+    failed++
   }
 }
+
+// Regression: center-square opening must not crash and must return a valid move
+{
+  const board = ['', '', '', '', 'X', '', '', '', '']
+  const idx = getBestMove(board)
+  assert('center-square opening returns valid index', typeof idx === 'number' && idx >= 0 && idx < 9 && board[idx] === '')
+}
+
+// Corner opening should work
+{
+  const board = ['X', '', '', '', '', '', '', '', '']
+  const idx = getBestMove(board)
+  assert('corner opening returns valid index', typeof idx === 'number' && idx >= 0 && idx < 9 && board[idx] === '')
+}
+
+// Mid-game board should work
+{
+  const board = ['X', 'O', 'X', '', '', '', '', '', '']
+  const idx = getBestMove(board)
+  assert('mid-game returns valid index', typeof idx === 'number' && idx >= 0 && idx < 9 && board[idx] === '')
+}
+
+console.log('\nResults: ' + passed + ' passed, ' + failed + ' failed')
+if (failed > 0) process.exit(1)
