@@ -1,4 +1,8 @@
-import { NextResponse } from 'next/server'
+import { describe, it, before } from 'node:test'
+import assert from 'node:assert/strict'
+
+// We can't import the route directly (NextResponse dependency),
+// so we extract and test the pure logic inline.
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -61,20 +65,27 @@ function getBestMove(board) {
   return bestIndex
 }
 
-export async function POST(request) {
-  try {
-    const data = await request.json()
-    const board = data.board
+describe('getBestMove', () => {
+  it('should not crash when X opens with center square (regression)', () => {
+    const board = ['', '', '', '', 'X', '', '', '', '']
+    const index = getBestMove(board)
+    assert.ok(typeof index === 'number', 'index should be a number')
+    assert.ok(index >= 0 && index < 9, 'index should be in range 0-8')
+    assert.notEqual(index, 4, 'AI should not pick an occupied cell')
+    assert.equal(board[index], '', 'AI should pick an empty cell')
+  })
 
-    if (!Array.isArray(board) || board.length !== 9) {
-      return NextResponse.json({ error: 'Invalid board' }, { status: 400 })
-    }
+  it('should return a valid move for corner opening', () => {
+    const board = ['X', '', '', '', '', '', '', '', '']
+    const index = getBestMove(board)
+    assert.ok(index >= 0 && index < 9)
+    assert.equal(board[index], '')
+  })
 
-    const boardCopy = [...board]
-    const index = getBestMove(boardCopy)
-
-    return NextResponse.json({ index })
-  } catch (e) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}
+  it('should return a valid move for a mid-game board', () => {
+    const board = ['X', 'O', 'X', '', '', '', '', '', '']
+    const index = getBestMove(board)
+    assert.ok(index >= 3 && index < 9)
+    assert.equal(board[index], '')
+  })
+})
