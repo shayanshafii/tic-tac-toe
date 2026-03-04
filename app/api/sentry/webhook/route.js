@@ -107,7 +107,7 @@ async function createDevinSession(prompt) {
 }
 
 export async function POST(request) {
-  const secret = process.env.SENTRY_WEBHOOK_SECRET
+  const secret = process.env.SENTRY_CLIENT_SECRET
   if (!secret) {
     return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 })
   }
