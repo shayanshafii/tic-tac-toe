@@ -11,6 +11,7 @@ function verifySignature(body, signature, secret) {
   return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature))
 }
 
+
 function extractStackInfo(issue) {
   const event = issue.latestEvent ?? issue.event
   if (!event?.entries) return null
