@@ -94,6 +94,7 @@ async function createDevinSession(prompt, issueId) {
     issueId,
     endpoint: 'https://api.devin.ai/v1/sessions',
     promptLength: prompt.length,
+    prompt,
   })
 
   const startTime = Date.now()
