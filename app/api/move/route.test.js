@@ -1,4 +1,12 @@
-import { NextResponse } from 'next/server'
+/**
+ * Regression tests for the move API game logic.
+ *
+ * The core functions (checkWinner, minimax, getBestMove) are duplicated here
+ * so we can test without importing next/server. They must stay in sync with
+ * route.js — any divergence is itself a signal to update the test.
+ */
+
+// ---- duplicated game logic (must match route.js) ----
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -61,20 +69,26 @@ function getBestMove(board) {
   return bestIndex
 }
 
-export async function POST(request) {
-  try {
-    const data = await request.json()
-    const board = data.board
+// ---- tests ----
 
-    if (!Array.isArray(board) || board.length !== 9) {
-      return NextResponse.json({ error: 'Invalid board' }, { status: 400 })
-    }
-
-    const boardCopy = [...board]
-    const index = getBestMove(boardCopy)
-
-    return NextResponse.json({ index })
-  } catch (e) {
-    throw e
+function assertValidMove(label, board) {
+  const index = getBestMove([...board])
+  if (typeof index !== 'number' || index < 0 || index > 8 || board[index] !== '') {
+    throw new Error(`${label}: expected valid empty index, got ${index}`)
   }
+  console.log(`PASS: ${label} (move=${index})`)
 }
+
+// Regression: center-square opening previously caused TypeError
+assertValidMove('center-square opening', ['', '', '', '', 'X', '', '', '', ''])
+
+// Other openings
+assertValidMove('corner opening',        ['X', '', '', '', '', '', '', '', ''])
+assertValidMove('edge opening',          ['', 'X', '', '', '', '', '', '', ''])
+assertValidMove('empty board',           ['', '', '', '', '', '', '', '', ''])
+
+// Mid-game states
+assertValidMove('mid-game 1', ['X', 'O', 'X', '', '', '', '', '', ''])
+assertValidMove('mid-game 2', ['X', '', '', '', 'O', '', '', '', 'X'])
+
+console.log('\nAll tests passed')
