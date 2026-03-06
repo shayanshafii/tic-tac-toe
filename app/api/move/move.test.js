@@ -1,4 +1,8 @@
-import { NextResponse } from 'next/server'
+import { describe, it } from 'node:test'
+import assert from 'node:assert/strict'
+
+// Duplicated from route.js because the module imports Next.js internals
+// that cannot be loaded outside the framework.
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -61,20 +65,27 @@ function getBestMove(board) {
   return bestIndex
 }
 
-export async function POST(request) {
-  try {
-    const data = await request.json()
-    const board = data.board
+describe('getBestMove', () => {
+  it('does not crash on center-square opening', () => {
+    const board = ['', '', '', '', 'X', '', '', '', '']
+    const index = getBestMove(board)
+    assert.equal(typeof index, 'number')
+    assert.ok(index >= 0 && index < 9, `expected valid index, got ${index}`)
+    assert.equal(board[index], '', 'AI should pick an empty cell')
+  })
 
-    if (!Array.isArray(board) || board.length !== 9) {
-      return NextResponse.json({ error: 'Invalid board' }, { status: 400 })
-    }
+  it('returns a valid move for corner opening', () => {
+    const board = ['X', '', '', '', '', '', '', '', '']
+    const index = getBestMove(board)
+    assert.equal(typeof index, 'number')
+    assert.ok(index >= 0 && index < 9)
+    assert.equal(board[index], '')
+  })
 
-    const boardCopy = [...board]
-    const index = getBestMove(boardCopy)
-
-    return NextResponse.json({ index })
-  } catch (e) {
-    throw e
-  }
-}
+  it('returns a valid move for an empty board', () => {
+    const board = Array(9).fill('')
+    const index = getBestMove(board)
+    assert.equal(typeof index, 'number')
+    assert.ok(index >= 0 && index < 9)
+  })
+})
