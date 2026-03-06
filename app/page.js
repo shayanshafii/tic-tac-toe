@@ -57,7 +57,18 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ board: next }),
       })
+      if (!res.ok) {
+        throw new Error(`AI move request failed with status ${res.status}`)
+      }
       const data = await res.json()
+      if (
+        typeof data.index !== 'number' ||
+        data.index < 0 ||
+        data.index > 8 ||
+        next[data.index] !== ''
+      ) {
+        throw new Error(`AI returned invalid move index: ${data.index}`)
+      }
       const afterAI = [...next]
       afterAI[data.index] = 'O'
       setBoard(afterAI)
