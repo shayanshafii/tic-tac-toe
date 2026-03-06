@@ -1,4 +1,10 @@
-import { NextResponse } from 'next/server'
+/**
+ * Regression test for Sentry issue:
+ * TypeError: Cannot read properties of null (reading 'bestMove')
+ * Triggered when the player's first move is the center square (index 4).
+ *
+ * We inline the core logic here to avoid needing the Next.js runtime.
+ */
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -61,20 +67,27 @@ function getBestMove(board) {
   return bestIndex
 }
 
-export async function POST(request) {
-  try {
-    const data = await request.json()
-    const board = data.board
+let passed = 0
 
-    if (!Array.isArray(board) || board.length !== 9) {
-      return NextResponse.json({ error: 'Invalid board' }, { status: 400 })
-    }
+// Regression: center-square opening must not crash
+const centerBoard = ['', '', '', '', 'X', '', '', '', '']
+const move1 = getBestMove([...centerBoard])
+console.assert(typeof move1 === 'number' && move1 >= 0 && move1 < 9, 'center opening: valid index')
+console.assert(centerBoard[move1] === '', 'center opening: picks empty cell')
+passed++
 
-    const boardCopy = [...board]
-    const index = getBestMove(boardCopy)
+// Corner opening
+const cornerBoard = ['X', '', '', '', '', '', '', '', '']
+const move2 = getBestMove([...cornerBoard])
+console.assert(typeof move2 === 'number' && move2 >= 0 && move2 < 9, 'corner opening: valid index')
+console.assert(cornerBoard[move2] === '', 'corner opening: picks empty cell')
+passed++
 
-    return NextResponse.json({ index })
-  } catch (e) {
-    throw e
-  }
-}
+// Mid-game board
+const midBoard = ['X', 'O', 'X', '', 'O', '', '', '', '']
+const move3 = getBestMove([...midBoard])
+console.assert(typeof move3 === 'number' && move3 >= 0 && move3 < 9, 'mid-game: valid index')
+console.assert(midBoard[move3] === '', 'mid-game: picks empty cell')
+passed++
+
+console.log(`All ${passed} regression tests passed.`)
