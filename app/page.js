@@ -57,6 +57,9 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ board: next }),
       })
+      if (!res.ok) {
+        throw new Error(`AI move request failed with status ${res.status}`)
+      }
       const data = await res.json()
       const afterAI = [...next]
       afterAI[data.index] = 'O'
