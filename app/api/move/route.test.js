@@ -1,4 +1,7 @@
-import { NextResponse } from 'next/server'
+/**
+ * Regression test for the move API logic.
+ * Run: node app/api/move/route.test.js
+ */
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -61,20 +64,34 @@ function getBestMove(board) {
   return bestIndex
 }
 
-export async function POST(request) {
-  try {
-    const data = await request.json()
-    const board = data.board
+let passed = 0
+let failed = 0
 
-    if (!Array.isArray(board) || board.length !== 9) {
-      return NextResponse.json({ error: 'Invalid board' }, { status: 400 })
-    }
-
-    const boardCopy = [...board]
-    const index = getBestMove(boardCopy)
-
-    return NextResponse.json({ index })
-  } catch (e) {
-    throw e
+function assert(condition, msg) {
+  if (condition) {
+    passed++
+  } else {
+    failed++
+    console.error(`FAIL: ${msg}`)
   }
 }
+
+// Regression: center-square opening must not crash
+const centerBoard = ['', '', '', '', 'X', '', '', '', '']
+const move = getBestMove(centerBoard)
+assert(typeof move === 'number' && move >= 0 && move < 9, 'getBestMove returns valid index for center opening')
+assert(centerBoard[move] === '', 'getBestMove picks an empty cell for center opening')
+assert([0, 2, 6, 8].includes(move), 'optimal response to center opening is a corner')
+
+// Empty board
+const emptyBoard = Array(9).fill('')
+const emptyMove = getBestMove(emptyBoard)
+assert(typeof emptyMove === 'number' && emptyMove >= 0 && emptyMove < 9, 'getBestMove returns valid index for empty board')
+
+// Near-full board
+const nearFull = ['X', 'O', 'X', 'O', 'X', '', 'O', 'X', 'O']
+const lastMove = getBestMove(nearFull)
+assert(lastMove === 5, 'getBestMove picks the only empty cell')
+
+console.log(`\nResults: ${passed} passed, ${failed} failed`)
+process.exit(failed > 0 ? 1 : 0)
