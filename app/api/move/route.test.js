@@ -94,7 +94,7 @@ test('center-square opening: returns a valid move without crashing (regression f
   assert(typeof index === 'number', `expected number, got ${typeof index}`)
   assert(index >= 0 && index <= 8, `index out of range: ${index}`)
   assert(index !== 4, `AI should not pick the occupied center square`)
-  assert(board[index] === '' || index === 4, `AI picked an occupied cell: ${index}`)
+  assert(board[index] === '', `AI picked an occupied cell: ${index}`)
 })
 
 test('corner opening: returns a valid move', () => {
