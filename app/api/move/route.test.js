@@ -1,5 +1,7 @@
-import { NextResponse } from 'next/server'
+import { describe, it } from 'node:test'
+import assert from 'node:assert/strict'
 
+// Inline the logic from route.js so we can test without Next.js runtime
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
   [0, 3, 6], [1, 4, 7], [2, 5, 8],
@@ -61,20 +63,31 @@ function getBestMove(board) {
   return bestIndex
 }
 
-export async function POST(request) {
-  try {
-    const data = await request.json()
-    const board = data.board
+describe('getBestMove', () => {
+  it('should not crash when X opens with center square', () => {
+    const board = ['', '', '', '', 'X', '', '', '', '']
+    const move = getBestMove(board)
+    assert.ok(move >= 0 && move <= 8, `expected valid index, got ${move}`)
+    assert.strictEqual(board[move], '', 'AI must pick an empty cell')
+  })
 
-    if (!Array.isArray(board) || board.length !== 9) {
-      return NextResponse.json({ error: 'Invalid board' }, { status: 400 })
-    }
+  it('should return a valid move for an empty board', () => {
+    const board = Array(9).fill('')
+    const move = getBestMove(board)
+    assert.ok(move >= 0 && move <= 8, `expected valid index, got ${move}`)
+  })
 
-    const boardCopy = [...board]
-    const index = getBestMove(boardCopy)
+  it('should pick the winning move when one is available', () => {
+    // O has two in a row at 0,1 — should complete at 2
+    const board = ['O', 'O', '', 'X', 'X', '', '', '', '']
+    const move = getBestMove(board)
+    assert.strictEqual(move, 2, 'AI should take the winning cell')
+  })
 
-    return NextResponse.json({ index })
-  } catch (e) {
-    throw e
-  }
-}
+  it('should block X from winning', () => {
+    // X has two in a row at 3,4 — AI should block at 5
+    const board = ['O', '', '', 'X', 'X', '', '', '', '']
+    const move = getBestMove(board)
+    assert.strictEqual(move, 5, 'AI should block X at cell 5')
+  })
+})
