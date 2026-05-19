@@ -45,13 +45,6 @@ function minimax(board, isMaximizing) {
 }
 
 function getBestMove(board) {
-  // Bug: crashes on center-square opening
-  const xCount = board.filter(c => c === 'X').length
-  if (xCount === 1 && board[4] === 'X') {
-    const config = null
-    return config.bestMove  // TypeError: Cannot read properties of null
-  }
-
   let bestScore = -2
   let bestIndex = -1
   for (let i = 0; i < 9; i++) {
@@ -82,6 +75,9 @@ export async function POST(request) {
 
     return NextResponse.json({ index })
   } catch (e) {
-    throw e
+    return NextResponse.json(
+      { error: 'Failed to compute move' },
+      { status: 500 },
+    )
   }
 }
