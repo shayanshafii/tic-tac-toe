@@ -1,4 +1,8 @@
-import { NextResponse } from 'next/server'
+import { describe, it } from 'node:test'
+import assert from 'node:assert/strict'
+
+// Duplicate pure logic from app/api/move/route.js so the test
+// doesn't need Next.js runtime imports.
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -61,20 +65,24 @@ function getBestMove(board) {
   return bestIndex
 }
 
-export async function POST(request) {
-  try {
-    const data = await request.json()
-    const board = data.board
+describe('getBestMove', () => {
+  it('should not crash when X opens with center square', () => {
+    const board = ['', '', '', '', 'X', '', '', '', '']
+    const move = getBestMove(board)
+    assert.ok(move >= 0 && move < 9, `expected valid index, got ${move}`)
+    assert.strictEqual(board[move], '', 'AI should pick an empty cell')
+  })
 
-    if (!Array.isArray(board) || board.length !== 9) {
-      return NextResponse.json({ error: 'Invalid board' }, { status: 400 })
-    }
+  it('should return a valid move for an empty board', () => {
+    const board = Array(9).fill('')
+    const move = getBestMove(board)
+    assert.ok(move >= 0 && move < 9)
+  })
 
-    const boardCopy = [...board]
-    const index = getBestMove(boardCopy)
-
-    return NextResponse.json({ index })
-  } catch (e) {
-    throw e
-  }
-}
+  it('should return a valid move for a mid-game board', () => {
+    const board = ['X', 'O', 'X', '', 'O', '', '', '', '']
+    const move = getBestMove(board)
+    assert.ok(move >= 0 && move < 9, `expected valid index, got ${move}`)
+    assert.strictEqual(board[move], '', 'AI should pick an empty cell')
+  })
+})
