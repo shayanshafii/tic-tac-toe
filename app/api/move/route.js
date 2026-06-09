@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getBestMove } from './logic'
+import { getBestMove } from './logic.js'
 
 export async function POST(request) {
   try {
