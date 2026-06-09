@@ -28,6 +28,11 @@ test('getBestMove blocks an immediate winning threat', () => {
   assert.equal(getBestMove(board), 2)
 })
 
+test('getBestMove returns -1 when the board has no empty cells', () => {
+  const board = ['X', 'O', 'X', 'X', 'O', 'O', 'O', 'X', 'X']
+  assert.equal(getBestMove(board), -1)
+})
+
 test('checkWinner detects a completed line', () => {
   assert.equal(checkWinner(['O', 'O', 'O', '', '', '', '', '', '']), 'O')
   assert.equal(checkWinner(['', '', '', '', '', '', '', '', '']), null)

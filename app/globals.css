@@ -85,6 +85,12 @@ h1 {
   margin-bottom: 8px;
 }
 
+.error {
+  font-size: 13px;
+  color: #c0392b;
+  margin-bottom: 8px;
+}
+
 .reset {
   font-size: 14px;
   color: #8a8a8a;

@@ -23,20 +23,24 @@ export default function Page() {
   const [gameStatus, setGameStatus] = useState('playing')
   const [winningCells, setWinningCells] = useState([])
   const [isThinking, setIsThinking] = useState(false)
+  const [error, setError] = useState('')
 
   const reset = useCallback(() => {
     setBoard(Array(9).fill(''))
     setGameStatus('playing')
     setWinningCells([])
     setIsThinking(false)
+    setError('')
   }, [])
 
   const handleClick = useCallback(async (i) => {
     if (board[i] || gameStatus !== 'playing' || isThinking) return
 
+    const prev = board
     const next = [...board]
     next[i] = 'X'
     setBoard(next)
+    setError('')
 
     const result = checkWinner(next)
     if (result) {
@@ -74,6 +78,10 @@ export default function Page() {
       }
     } catch (err) {
       Sentry.captureException(err)
+      // Roll back the player's move so they can retry rather than
+      // being able to take another turn while the board is stuck.
+      setBoard(prev)
+      setError('the computer could not move. please try again.')
     } finally {
       setIsThinking(false)
     }
@@ -109,6 +117,7 @@ export default function Page() {
         ))}
       </div>
       <div className="status">{statusText}</div>
+      {error && <div className="error">{error}</div>}
       {gameStatus !== 'playing' && (
         <button className="reset" onClick={reset}>
           play again

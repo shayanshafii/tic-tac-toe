@@ -1,12 +1,28 @@
 import { NextResponse } from 'next/server'
 import { getBestMove } from './logic.js'
 
-export async function POST(request) {
-  const data = await request.json()
-  const board = data.board
+const VALID_CELLS = new Set(['', 'X', 'O'])
 
-  if (!Array.isArray(board) || board.length !== 9) {
+export async function POST(request) {
+  let data
+  try {
+    data = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const board = data?.board
+
+  if (
+    !Array.isArray(board) ||
+    board.length !== 9 ||
+    !board.every((cell) => VALID_CELLS.has(cell))
+  ) {
     return NextResponse.json({ error: 'Invalid board' }, { status: 400 })
+  }
+
+  if (!board.includes('')) {
+    return NextResponse.json({ error: 'No legal moves available' }, { status: 400 })
   }
 
   const boardCopy = [...board]
